@@ -38,6 +38,9 @@ class MOSFET:
     spice_model: str = ""
     datasheet_url: str = ""
     tags: list[str] = field(default_factory=list)
+    unit_cost_usd: float = 0
+    package_volume_mm3: float = 0
+    thermal_resistance_C_per_W: float = 0
 
 
 @dataclass
@@ -55,6 +58,9 @@ class Diode:
     spice_model: str = ""
     datasheet_url: str = ""
     tags: list[str] = field(default_factory=list)
+    unit_cost_usd: float = 0
+    package_volume_mm3: float = 0
+    thermal_resistance_C_per_W: float = 0
 
 
 @dataclass
@@ -71,6 +77,8 @@ class Capacitor:
     package: str = ""
     datasheet_url: str = ""
     tags: list[str] = field(default_factory=list)
+    unit_cost_usd: float = 0
+    package_volume_mm3: float = 0
 
 
 # ── Reference component library ─────────────────────────────────────────
@@ -107,6 +115,63 @@ REFERENCE_CAPACITORS: list[Capacitor] = [
     Capacitor("ECW-F4105JA", "Panasonic", 1, 400, 5, 2, "Film", "Box"),
     Capacitor("B32523Q6105K", "EPCOS/TDK", 1, 400, 8, 1.5, "Film", "Box"),
 ]
+
+
+_PACKAGE_VOLUME_MM3 = {
+    "TDSON-8": 35,
+    "PowerFLAT-8": 30,
+    "BGA": 18,
+    "GaNPX": 90,
+    "TO-220": 1250,
+    "TO-247": 2600,
+    "TO-247N": 2600,
+    "TO-263": 820,
+    "DPAK": 260,
+    "SMA": 70,
+    "SMB": 120,
+    "SMC": 220,
+    "1206": 8,
+    "1210": 13,
+    "8x10": 500,
+    "10x12.5": 980,
+    "Box": 900,
+}
+
+_TECH_COST_USD = {
+    "Si": 0.85,
+    "GaN": 4.5,
+    "SiC": 6.0,
+}
+
+
+def _with_estimated_component_metadata() -> None:
+    """Fill cost/volume fields for built-in records without changing call sites."""
+    for m in REFERENCE_MOSFETS:
+        if not m.package_volume_mm3:
+            m.package_volume_mm3 = _PACKAGE_VOLUME_MM3.get(m.package, 250)
+        if not m.unit_cost_usd:
+            voltage_factor = 1.0 + max(m.vds_max_V - 100, 0) / 1000
+            current_factor = 1.0 + m.id_max_A / 200
+            m.unit_cost_usd = round(_TECH_COST_USD.get(m.technology, 1.0) * voltage_factor * current_factor, 2)
+        if not m.thermal_resistance_C_per_W:
+            m.thermal_resistance_C_per_W = 45 if "TO-247" in m.package else 65
+    for d in REFERENCE_DIODES:
+        if not d.package_volume_mm3:
+            d.package_volume_mm3 = _PACKAGE_VOLUME_MM3.get(d.package, 160)
+        if not d.unit_cost_usd:
+            type_factor = 2.5 if d.diode_type == "SiC" else 1.0
+            d.unit_cost_usd = round(type_factor * (0.25 + d.vr_max_V / 2500 + d.if_max_A / 80), 2)
+        if not d.thermal_resistance_C_per_W:
+            d.thermal_resistance_C_per_W = 55
+    for c in REFERENCE_CAPACITORS:
+        if not c.package_volume_mm3:
+            c.package_volume_mm3 = _PACKAGE_VOLUME_MM3.get(c.package, max(12, c.capacitance_uF * 12))
+        if not c.unit_cost_usd:
+            type_factor = {"MLCC": 0.18, "Polymer": 0.6, "Electrolytic": 0.35, "Film": 0.75}.get(c.cap_type, 0.3)
+            c.unit_cost_usd = round(type_factor * (1 + c.voltage_rating_V / 200 + c.capacitance_uF / 220), 2)
+
+
+_with_estimated_component_metadata()
 
 
 def search_mosfets(

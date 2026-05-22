@@ -27,6 +27,7 @@ from pea.tools.calculator import (
     topology_recommendation,
     transformer_design as _transformer_design,
 )
+from pea.optimization import optimize_converter_design as _optimize_converter_design
 
 
 def _fmt(result: dict) -> str:
@@ -288,6 +289,51 @@ def estimate_efficiency(
     ))
 
 
+# ── Pareto optimization ──────────────────────────────────────────────────
+
+
+@tool
+def optimize_converter_design(
+    v_in_min: float,
+    v_in_nom: float,
+    v_in_max: float,
+    v_out: float,
+    i_out: float,
+    isolation_required: bool = False,
+    f_sw_min_khz: float = 50.0,
+    f_sw_max_khz: float = 500.0,
+    population_size: int = 48,
+    generations: int = 18,
+) -> str:
+    """Generate Pareto converter designs across topology, frequency, semiconductors, magnetics, efficiency, volume, and cost. Use when the user asks for optimized or trade-off designs."""
+    result = _optimize_converter_design(
+        {
+            "v_in_min": v_in_min,
+            "v_in_nom": v_in_nom,
+            "v_in_max": v_in_max,
+            "v_out": v_out,
+            "i_out": i_out,
+            "isolation_required": isolation_required,
+            "fsw_range_khz": [f_sw_min_khz, f_sw_max_khz],
+        },
+        {
+            "population_size": population_size,
+            "generations": generations,
+            "max_candidates": 80,
+            "backend": "auto",
+        },
+    )
+    data = result.to_dict()
+    # Keep agent context compact: return Pareto front and recommendation, not every candidate.
+    return _fmt({
+        "backend": data["backend"],
+        "warnings": data["warnings"],
+        "ranking_explanation": data["ranking_explanation"],
+        "recommended_candidate": data["recommended_candidate"],
+        "pareto_front": data["pareto_front"][:12],
+    })
+
+
 # ── Tool list ────────────────────────────────────────────────────────────
 
 
@@ -308,4 +354,5 @@ def get_pea_tools() -> list:
         design_inductor,
         design_transformer,
         estimate_efficiency,
+        optimize_converter_design,
     ]

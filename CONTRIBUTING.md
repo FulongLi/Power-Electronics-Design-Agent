@@ -1,6 +1,6 @@
 # Contributing to PEA
 
-**Last updated:** 2026-04-01
+**Last updated:** 2026-05-22
 
 Thank you for helping improve PEA (Power Electronics AI Agent). This document is for anyone who will maintain or extend the project.
 
@@ -9,6 +9,8 @@ Thank you for helping improve PEA (Power Electronics AI Agent). This document is
 PEA assists with power electronics design: topology recommendation, DC-DC parameter calculations, efficiency estimation, optional RAG over curated knowledge, and multi-turn chat via LangChain + OpenAI.
 
 - **Core logic** lives in Python under `pea/`; the **single source of truth** for design equations is `pea/tools/calculator.py`.
+- **Pareto optimization** lives in `pea/optimization.py`: it generates DC-DC candidates, ranks efficiency/volume/cost trade-offs, uses optional `pymoo` NSGA-II when installed, and otherwise falls back to a deterministic screening backend.
+- **3D envelope export** lives in `pea/cad.py` and requires the optional `[cad]` extra (`cadquery`). The first version exports mechanical envelope STEP models, not detailed PCB layout.
 - **`app.py`** is the Streamlit UI; it calls the same calculator tools as the CLI.
 - **`index.html`** is a **standalone** UI (browser or **`pea/desktop.py`**). **User-visible copy is English.** The sidebar **pins** **Topology Advisor** (auto topology recommendation) and **Efficiency estimate** above the DC-DC / DC-AC / AC-DC / AC-AC tabs so they are always visible. Also: SPICE / components / magnetics and a **Cursor-style agent** (model picker, optional OpenAI in ⚙, rules fallback). It does **not** call Python for calculators. **DAB**, magnetics (inductor/transformer), and efficiency calculators are now implemented in both `index.html` (JS) and `calculator.py` (Python)—keep both sides aligned when you extend features.
 
@@ -63,6 +65,13 @@ For desktop / SPICE-LTspice work, also install the desktop extra:
 pip install -e ".[desktop]"
 ```
 
+For Pareto optimization and STEP export:
+
+```bash
+pip install -e ".[optimize]"  # optional pymoo NSGA-II backend
+pip install -e ".[cad]"       # optional CadQuery STEP export
+```
+
 Copy `.env.example` to `.env` and set `OPENAI_API_KEY` when working on the agent, Streamlit chat, or `scripts/agent_smoke_test.py`.
 
 ## Running tests
@@ -91,6 +100,8 @@ ruff format .
 | Design equations & tool dispatch | `pea/tools/calculator.py` |
 | Magnetics data (core shapes, materials) | `pea/tools/magnetics_data.py` |
 | Component schema & search | `pea/components/schema.py` |
+| Pareto optimization | `pea/optimization.py` |
+| STEP envelope export | `pea/cad.py` |
 | LangChain tools exposed to the LLM | `pea/tools/langchain_tools.py` |
 | Agent behavior, prompts, chat loop | `pea/agent/runner.py` |
 | RAG documents | `pea/knowledge/documents.py` |
@@ -125,6 +136,7 @@ After you **materially edit** `CONTRIBUTING.md`, bump the **Last updated** date 
 - Keep changes **focused** on the issue or feature; avoid unrelated refactors.
 - **Match existing style** in the files you touch (imports, naming, typing).
 - Add or extend **pytest** coverage when you change `calculator.py` or `execute_tool` behavior.
+- Add or extend optimizer tests when you change Pareto ranking, candidate feasibility, cost/volume/loss estimates, optional dependency behavior, or CAD export boundaries.
 - Follow **Documentation maintenance** above: sync **README.md** and **CONTRIBUTING.md** with user-facing changes.
 - If you add or redistribute **vendor SPICE models**, respect the vendor's license and keep disclaimers in `raw_spice`; prefer documenting re-import steps over committing huge proprietary drops unless the project explicitly allows it.
 

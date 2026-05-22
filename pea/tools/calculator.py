@@ -624,7 +624,7 @@ def inductor_design(
     # Wire sizing
     Aw_wire_mm2 = i_rms / j_current_density
     d_wire_mm = math.sqrt(4 * Aw_wire_mm2 / math.pi)
-    awg = round(math.log(d_wire_mm / 8.251) / math.log(0.890526) * -1)
+    awg = round(math.log(d_wire_mm / 8.251) / math.log(0.890526))
     fill = N * Aw_wire_mm2 / selected["Aw"]
 
     # Air gap
@@ -751,8 +751,8 @@ def transformer_design(
     Aw_sec = I_sec * math.sqrt(1 - duty_cycle) / J
     d_pri = math.sqrt(4 * Aw_pri / math.pi)
     d_sec = math.sqrt(4 * Aw_sec / math.pi)
-    awg_pri = round(math.log(d_pri / 8.251) / math.log(0.890526) * -1)
-    awg_sec = round(math.log(d_sec / 8.251) / math.log(0.890526) * -1)
+    awg_pri = round(math.log(d_pri / 8.251) / math.log(0.890526))
+    awg_sec = round(math.log(d_sec / 8.251) / math.log(0.890526))
     fill = (N_pri * Aw_pri + N_sec * Aw_sec) / selected["Aw"]
 
     # Steinmetz core loss

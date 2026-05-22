@@ -11,9 +11,13 @@ user-facing behavior in sync when you change calculators or taxonomy.
 
 import json
 import os
+import tempfile
+from pathlib import Path
+
 import streamlit as st
 
 from pea.agent.runner import PEAAgent
+from pea.optimization import OptimizationConfig, optimize_converter_design
 from pea.tools.calculator import execute_tool
 
 
@@ -193,6 +197,129 @@ with st.sidebar:
             st.json(json.loads(result))
         except json.JSONDecodeError:
             st.code(result)
+
+# ── Main area: Pareto optimizer ──────────────────────────────────────────
+st.header("Pareto Optimizer")
+st.caption(
+    "Generate DC-DC candidate designs and rank the Pareto front by efficiency, power density, and estimated BOM cost."
+)
+
+with st.form("pareto_optimizer_form"):
+    col_a, col_b, col_c = st.columns(3)
+    with col_a:
+        opt_vin_min = st.number_input("V_in min (V)", min_value=0.1, value=36.0, step=1.0)
+        opt_vin_nom = st.number_input("V_in nominal (V)", min_value=0.1, value=48.0, step=1.0)
+        opt_vin_max = st.number_input("V_in max (V)", min_value=0.1, value=60.0, step=1.0)
+    with col_b:
+        opt_vout = st.number_input("V_out (V)", min_value=0.1, value=12.0, step=0.5)
+        opt_iout = st.number_input("I_out (A)", min_value=0.01, value=20.0, step=0.5)
+        opt_isolated = st.checkbox("Require isolation (LLC only in v1)", value=False)
+    with col_c:
+        opt_fmin = st.number_input("f_sw min (kHz)", min_value=10.0, value=80.0, step=10.0)
+        opt_fmax = st.number_input("f_sw max (kHz)", min_value=10.0, value=400.0, step=10.0)
+        opt_seed = st.number_input("Seed", min_value=0, value=7, step=1)
+
+    topologies = st.multiselect(
+        "Candidate topologies",
+        ["Buck", "Boost", "Buck-Boost", "SEPIC", "Cuk", "LLC"],
+        default=["Buck", "Boost", "Buck-Boost", "SEPIC", "Cuk", "LLC"],
+    )
+    col_d, col_e = st.columns(2)
+    with col_d:
+        pop_size = st.slider("Population size", min_value=16, max_value=160, value=48, step=8)
+    with col_e:
+        generations = st.slider("Generations", min_value=4, max_value=80, value=18, step=2)
+    run_optimizer = st.form_submit_button("Run Pareto Optimization", use_container_width=True)
+
+if run_optimizer:
+    try:
+        result = optimize_converter_design(
+            {
+                "v_in_min": opt_vin_min,
+                "v_in_nom": opt_vin_nom,
+                "v_in_max": opt_vin_max,
+                "v_out": opt_vout,
+                "i_out": opt_iout,
+                "topology_allowlist": topologies,
+                "isolation_required": opt_isolated,
+                "fsw_range_khz": [opt_fmin, opt_fmax],
+            },
+            OptimizationConfig(
+                population_size=pop_size,
+                generations=generations,
+                seed=opt_seed,
+                max_candidates=120,
+                backend="auto",
+            ),
+        )
+        data = result.to_dict()
+        st.session_state["pareto_result"] = data
+    except Exception as e:
+        st.error(str(e))
+
+if "pareto_result" in st.session_state:
+    data = st.session_state["pareto_result"]
+    if data.get("warnings"):
+        st.warning(" | ".join(data["warnings"]))
+    st.markdown(f"**Backend:** `{data.get('backend')}`")
+    st.info(data.get("ranking_explanation", ""))
+
+    rec = data.get("recommended_candidate")
+    if rec:
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("Recommended", rec["topology"])
+        c2.metric("Efficiency", f"{rec['estimated_efficiency_pct']}%")
+        c3.metric("Power density", f"{rec['power_density_W_per_L']} W/L")
+        c4.metric("BOM estimate", f"${rec['cost_usd']}")
+
+        st.subheader("Recommended Design")
+        st.json(rec)
+
+        with st.expander("Export STEP envelope"):
+            st.caption("Requires optional CAD dependency: `pip install -e '.[cad]'`.")
+            if st.button("Generate STEP for recommended design"):
+                try:
+                    from pea.cad import export_candidate_step
+
+                    out = Path(tempfile.gettempdir()) / f"pea_{rec['candidate_id']}.step"
+                    info = export_candidate_step(rec, out)
+                    with open(out, "rb") as f:
+                        st.download_button(
+                            "Download STEP",
+                            data=f,
+                            file_name=out.name,
+                            mime="application/step",
+                        )
+                    st.success(f"STEP generated: {info['path']}")
+                except Exception as e:
+                    st.error(str(e))
+
+    front = data.get("pareto_front") or []
+    if front:
+        rows = [
+            {
+                "id": c["candidate_id"],
+                "topology": c["topology"],
+                "f_kHz": c["frequency_khz"],
+                "efficiency_pct": c["estimated_efficiency_pct"],
+                "volume_cm3": round(c["volume_mm3"] / 1000, 2),
+                "cost_usd": c["cost_usd"],
+                "power_density_W_L": c["power_density_W_per_L"],
+                "score": c["score"],
+            }
+            for c in front
+        ]
+        st.subheader("Pareto Front")
+        st.dataframe(rows, use_container_width=True)
+        chart_rows = [
+            {
+                "cost_usd": row["cost_usd"],
+                "efficiency_pct": row["efficiency_pct"],
+                "volume_cm3": row["volume_cm3"],
+            }
+            for row in rows
+        ]
+        st.scatter_chart(chart_rows, x="cost_usd", y="efficiency_pct", size="volume_cm3")
 
 # ── Main area: AI Chat ───────────────────────────────────────────────────
 st.header("AI Chat")

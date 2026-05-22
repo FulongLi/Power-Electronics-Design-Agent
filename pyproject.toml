@@ -39,6 +39,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = ["pytest>=7.0", "ruff>=0.1.0"]
 desktop = ["pywebview>=5.0"]
+optimize = ["pymoo>=0.6.1", "numpy>=1.24", "pandas>=2.0"]
+cad = ["cadquery>=2.4"]
 
 [project.scripts]
 pea = "pea.cli:run_cli"

@@ -103,6 +103,33 @@ python -m pea.cli tool components --v-in 12 --v-out 5 --i-out 2
 
 **Expected:** Recommended MOSFETs, diodes, and capacitors.
 
+### 1.10 Pareto optimizer (Streamlit)
+
+```powershell
+streamlit run app.py
+```
+
+In **Pareto Optimizer**, run:
+
+- `V_in`: 36 / 48 / 60 V
+- `V_out`: 12 V
+- `I_out`: 20 A
+- `f_sw`: 80–400 kHz
+
+**Expected:** A recommended design, Pareto table, efficiency/cost scatter chart,
+loss breakdown, selected semiconductor and magnetics data.
+
+Optional STEP export:
+
+```powershell
+pip install -e ".[cad]"
+```
+
+Then click **Generate STEP for recommended design**.
+
+**Expected:** A downloadable STEP envelope model. Without `[cad]`, the UI should
+show a clear message asking to install the CAD extra.
+
 ---
 
 ## Step 2 — AI agent (API key required)

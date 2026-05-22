@@ -9,6 +9,8 @@ An AI assistant for power electronics design: topology selection, parameter calc
 - **Magnetics design**: Inductor and transformer sizing with core selection (EE, PQ, RM, ETD, EFD, EP, toroid, EI), ferrite material library (N87, N97, 3C90, 3C95, 3F3, PC40, PC95), Steinmetz core loss
 - **Component library**: Reference MOSFETs (Si, GaN, SiC), diodes (Schottky, SiC, Ultrafast), and capacitors with auto-recommendation from operating point
 - **Efficiency estimation**: First-order loss breakdown (conduction + switching) with component parameters
+- **Pareto optimizer**: Generates DC-DC design candidates across topology, switching frequency, semiconductors, magnetics, efficiency, volume, and estimated BOM cost
+- **STEP envelope export**: Optional CadQuery-based 3D envelope model for the recommended optimized design (PCB, magnetics, semiconductors, capacitors, heatsink blocks)
 - **RAG knowledge base**: Answers questions using curated power electronics knowledge — topologies, SST (solid-state transformers), cascade architectures, magnetics, and component selection (Erickson & Maksimovic)
 - **Multi-turn AI chat**: Conversational agent that remembers context across messages
 - **CLI & Web UI**: Terminal (`pea`) or Streamlit (`app.py`)
@@ -22,6 +24,16 @@ An AI assistant for power electronics design: topology selection, parameter calc
 ```bash
 cd PEA
 pip install -e .
+```
+
+Optional extras:
+
+```bash
+# Multi-objective optimizer backend (pymoo NSGA-II)
+pip install -e ".[optimize]"
+
+# STEP export for optimized candidate envelopes
+pip install -e ".[cad]"
 ```
 
 Or install dependencies only:
@@ -69,6 +81,11 @@ pea tool efficiency --v-in 12 --v-out 5 --i-out 2 --rds-on 50 --dcr 30
 # Component recommendation
 pea tool components --v-in 12 --v-out 5 --i-out 2
 ```
+
+The Streamlit app also includes a **Pareto Optimizer** workspace. It accepts DC-DC
+specifications, generates feasible Buck / Boost / Buck-Boost / SEPIC / Cuk / LLC
+candidates, shows the Pareto front, and can export a STEP envelope when the
+`[cad]` extra is installed.
 
 ### 3. AI chat (requires OpenAI API key)
 
@@ -144,6 +161,8 @@ PEA/
 │   ├── components/
 │   │   ├── __init__.py
 │   │   └── schema.py         # Component schema (MOSFET, Diode, Capacitor) + search + auto-recommend
+│   ├── optimization.py       # Pareto candidate generation + optional pymoo NSGA-II backend
+│   ├── cad.py                # Optional CadQuery STEP envelope export
 │   ├── cli.py                # pea console entry point
 │   └── desktop.py            # Native window → index.html
 ├── tests/                    # pytest (calculators, magnetics, components, execute_tool)
