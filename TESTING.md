@@ -105,6 +105,14 @@ python -m pea.cli tool components --v-in 12 --v-out 5 --i-out 2
 
 ### 1.10 Pareto optimizer (Streamlit)
 
+CLI smoke test:
+
+```powershell
+python -m pea.cli optimize --v-in-min 36 --v-in 48 --v-in-max 60 --v-out 12 --i-out 20 --summary
+```
+
+**Expected:** Backend line, Pareto candidate count, and recommended design summary.
+
 ```powershell
 streamlit run app.py
 ```

@@ -80,6 +80,9 @@ pea tool efficiency --v-in 12 --v-out 5 --i-out 2 --rds-on 50 --dcr 30
 
 # Component recommendation
 pea tool components --v-in 12 --v-out 5 --i-out 2
+
+# Pareto optimization
+pea optimize --v-in-min 36 --v-in 48 --v-in-max 60 --v-out 12 --i-out 20 --summary
 ```
 
 The Streamlit app also includes a **Pareto Optimizer** workspace. It accepts DC-DC

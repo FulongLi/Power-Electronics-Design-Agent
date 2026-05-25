@@ -3,6 +3,7 @@ Command-line interface for PEA (Power Electronics AI Agent).
 """
 
 import argparse
+import json
 import sys
 
 from pea.tools.calculator import get_available_tools
@@ -84,6 +85,33 @@ def run_cli():
     tool_parser.add_argument("--v-sec", type=float, help="Secondary voltage V (transformer)")
     tool_parser.add_argument("--power", type=float, help="Power W (transformer)")
     tool_parser.add_argument("--duty", type=float, default=0.45, help="Duty cycle (transformer)")
+
+    # Pareto optimizer
+    opt_parser = subparsers.add_parser("optimize", help="Run Pareto DC-DC optimizer (no API key needed)")
+    opt_parser.add_argument("--v-in", type=float, help="Nominal input voltage (V)")
+    opt_parser.add_argument("--v-in-min", type=float, help="Minimum input voltage (V)")
+    opt_parser.add_argument("--v-in-max", type=float, help="Maximum input voltage (V)")
+    opt_parser.add_argument("--v-out", type=float, required=True, help="Output voltage (V)")
+    opt_parser.add_argument("--i-out", type=float, required=True, help="Output current (A)")
+    opt_parser.add_argument(
+        "--topology",
+        action="append",
+        dest="topologies",
+        help="Candidate topology; repeat for multiple (default: all v1 topologies)",
+    )
+    opt_parser.add_argument("--isolated", action="store_true", help="Require isolation (LLC only in v1)")
+    opt_parser.add_argument("--f-sw-min", type=float, default=50.0, help="Minimum switching frequency (kHz)")
+    opt_parser.add_argument("--f-sw-max", type=float, default=500.0, help="Maximum switching frequency (kHz)")
+    opt_parser.add_argument("--population-size", type=int, default=48, help="Optimizer population size")
+    opt_parser.add_argument("--generations", type=int, default=18, help="Optimizer generations")
+    opt_parser.add_argument("--max-candidates", type=int, default=80, help="Maximum candidates to return")
+    opt_parser.add_argument(
+        "--backend",
+        choices=["auto", "pymoo", "deterministic"],
+        default="auto",
+        help="Optimizer backend",
+    )
+    opt_parser.add_argument("--summary", action="store_true", help="Print compact summary instead of full JSON")
 
     # List tools
     subparsers.add_parser("tools", help="List available design tools")
@@ -175,6 +203,62 @@ def run_cli():
                                   i_out=args.i_out, f_sw_khz=args.f_sw)
 
         print(result)
+        return 0
+
+    if args.command == "optimize":
+        from pea.optimization import OptimizationConfig, optimize_converter_design
+
+        v_nom = args.v_in
+        if v_nom is None and args.v_in_min is None and args.v_in_max is None:
+            print("Error: optimize requires --v-in or an input range", file=sys.stderr)
+            return 1
+        if v_nom is None:
+            if args.v_in_min is not None and args.v_in_max is not None:
+                v_nom = (args.v_in_min + args.v_in_max) / 2
+            else:
+                v_nom = args.v_in_min if args.v_in_min is not None else args.v_in_max
+        v_min = args.v_in_min if args.v_in_min is not None else v_nom
+        v_max = args.v_in_max if args.v_in_max is not None else v_nom
+        try:
+            result = optimize_converter_design(
+                {
+                    "v_in_min": v_min,
+                    "v_in_nom": v_nom,
+                    "v_in_max": v_max,
+                    "v_out": args.v_out,
+                    "i_out": args.i_out,
+                    "topology_allowlist": args.topologies
+                    or ["Buck", "Boost", "Buck-Boost", "SEPIC", "Cuk", "LLC"],
+                    "isolation_required": args.isolated,
+                    "fsw_range_khz": [args.f_sw_min, args.f_sw_max],
+                },
+                OptimizationConfig(
+                    population_size=args.population_size,
+                    generations=args.generations,
+                    max_candidates=args.max_candidates,
+                    backend=args.backend,
+                ),
+            )
+        except Exception as e:
+            print(f"Error: {e}", file=sys.stderr)
+            return 1
+
+        data = result.to_dict()
+        if args.summary:
+            rec = data.get("recommended_candidate")
+            print(data.get("ranking_explanation", ""))
+            print(f"Backend: {data.get('backend')}")
+            print(f"Pareto candidates: {len(data.get('pareto_front') or [])}")
+            if rec:
+                print(
+                    "Recommended: "
+                    f"{rec['topology']} @ {rec['frequency_khz']} kHz, "
+                    f"{rec['estimated_efficiency_pct']}% efficiency, "
+                    f"{rec['power_density_W_per_L']} W/L, "
+                    f"${rec['cost_usd']}"
+                )
+            return 0
+        print(json.dumps(data, indent=2))
         return 0
 
     if args.command == "chat":

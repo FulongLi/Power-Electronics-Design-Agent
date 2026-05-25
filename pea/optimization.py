@@ -291,7 +291,15 @@ def _optimize_with_pymoo(spec: DesignSpec, cfg: OptimizationConfig) -> ParetoRes
         seed=cfg.seed,
         verbose=False,
     )
-    vectors = result.X if result.X is not None else []
+    if result.X is None:
+        vectors = []
+    else:
+        try:
+            import numpy as np
+
+            vectors = np.atleast_2d(result.X)
+        except Exception:
+            vectors = result.X
     candidates = []
     for x in vectors:
         cand = _candidate_from_vector(
@@ -465,7 +473,17 @@ def _build_candidate(
     cost_usd = _estimate_cost_usd(mosfet, diode, capacitor, mag, topology)
     efficiency = round(100.0 * p_out / (p_out + loss["total_loss_W"]), 2)
     power_density = p_out / (volume_mm3 / 1_000_000.0)
-    cid = f"{topology.lower().replace('-', '').replace(' ', '')}-{round(f_sw_khz)}-{mag.get('core', 'core')}"
+    cid = "-".join(
+        _slug(x)
+        for x in (
+            topology,
+            str(round(f_sw_khz)),
+            str(mag.get("core", "core")),
+            material,
+            _part_number(mosfet) or "fet",
+            _part_number(capacitor) or "cap",
+        )
+    )
     return CandidateDesign(
         candidate_id=cid,
         topology=topology,
@@ -757,6 +775,11 @@ def _pick(items: list[Any], x: float) -> Any:
 
 def _part_number(part: Any) -> str:
     return getattr(part, "part_number", "") if part else ""
+
+
+def _slug(value: str) -> str:
+    text = value.lower().replace(" ", "").replace("/", "").replace("_", "-")
+    return "".join(ch for ch in text if ch.isalnum() or ch == "-") or "x"
 
 
 def _part_cost(part: Any, fallback: float) -> float:
